@@ -1,3 +1,11 @@
+# force non-OpenGL backend for headless builds
+try
+    import CairoMakie
+    CairoMakie.activate!()
+catch err
+    @warn "CairoMakie not available, falling back to default Makie backend" err
+end
+
 using JutulDarcy
 using Jutul
 using Literate
