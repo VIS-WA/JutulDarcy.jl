@@ -1,15 +1,13 @@
 name: CI
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
     tags: '*'
   pull_request:
 concurrency:
-  # Skip intermediate builds: always.
-  # Cancel intermediate builds: only if it is a pull request build.
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+
 jobs:
   test:
     name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
@@ -17,12 +15,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version:
-          - '1'
-        os:
-          - ubuntu-latest
-        arch:
-          - x64
+        version: [ '1' ]
+        os: [ ubuntu-latest ]
+        arch: [ x64 ]
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
@@ -36,47 +31,62 @@ jobs:
       - uses: codecov/codecov-action@v5
         with:
           files: lcov.info
-      # - uses: julia-actions/julia-uploadcoveralls@v1
-      #  env:
-      #    COVERALLS_TOKEN: ${{ secrets.COVERALLS_TOKEN }}
-  docs:
-    name: Documentation
+
+  docs-pdf:
+    name: Build docs and export PDF
     runs-on: ubuntu-latest
     timeout-minutes: 300
-    permissions:
-      contents: write
     steps:
-      - name: Increase swapfile
+      - uses: actions/checkout@v4
+
+      # GLMakie/Xvfb deps needed by your docs build
+      - name: System deps
         run: |
-          sudo swapoff -a
-          sudo fallocate -l 15G /swapfile
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
-          sudo swapon --show
-      - name: Add GLMakie/XFVB dependencies
-        run: sudo apt-get update && sudo apt-get install -y xorg-dev mesa-utils xvfb libgl1 freeglut3-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libcairo2-dev libfreetype6-dev libffi-dev libjpeg-dev libpng-dev libz-dev
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Julia
+          sudo apt-get update
+          sudo apt-get install -y xorg-dev mesa-utils xvfb libgl1 freeglut3-dev \
+              libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev \
+              libcairo2-dev libfreetype6-dev libffi-dev libjpeg-dev libpng-dev libz-dev
+
+      - name: Setup Julia
         uses: julia-actions/setup-julia@v2
         with:
           version: '1'
+
       - name: Julia cache
         uses: julia-actions/cache@v2
-      - name: "BuildPkg"
-        uses: julia-actions/julia-buildpkg@v1
-      - name: "docdeploy"
-        uses: julia-actions/julia-docdeploy@v1
-        with:
-          prefix: xvfb-run
+
+      # Build the docs site (no deployment)
+      - name: Build VitePress docs via DocumenterVitepress.jl
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DISPLAY: :0
-      - name: Doc build
         run: |
-          DISPLAY=:0 xvfb-run -s '-screen 0 1024x768x24' julia --project=docs -e '
-            using Documenter: DocMeta, doctest
-            using JutulDarcy
-            DocMeta.setdocmeta!(JutulDarcy, :DocTestSetup, :(using JutulDarcy); recursive=true)
-            doctest(JutulDarcy)'
+          xvfb-run -s "-screen 0 1024x768x24" julia --project=docs -e 'include("docs/make.jl")'
+
+      # Node for the PDF exporter
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: docs/package-lock.json
+
+      # Install exporter locally in docs/ (keeps repo clean)
+      - name: Install PDF exporter
+        run: |
+          cd docs
+          [ -f package.json ] || npm init -y
+          npm i -D vitepress-export-pdf puppeteer
+
+      # Export a single PDF from all routes
+      - name: Export PDF
+        working-directory: docs
+        run: |
+          # Optional config file improves ordering; see snippet below.
+          npx press-export-pdf export . --out-file JutulDarcy-docs.pdf
+
+      - name: Upload PDF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: JutulDarcy-docs
+          path: docs/JutulDarcy-docs.pdf
+          if-no-files-found: error
