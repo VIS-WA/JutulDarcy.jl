@@ -1,9 +1,11 @@
 name: CI
+
 on:
   push:
     branches: [ main ]
     tags: '*'
   pull_request:
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
@@ -33,19 +35,18 @@ jobs:
           files: lcov.info
 
   docs-pdf:
-    name: Build docs and export PDF
+    name: Build docs and export PDF (no deploy)
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
-      # GLMakie/Xvfb deps needed by your docs build
-      - name: System deps
+      # Minimal system deps: drop full OpenGL stack and swapfile
+      - name: Install minimal headless deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y xorg-dev mesa-utils xvfb libgl1 freeglut3-dev \
-              libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev \
-              libcairo2-dev libfreetype6-dev libffi-dev libjpeg-dev libpng-dev libz-dev
+          sudo apt-get install -y xvfb libgl1
+          # often enough for headless build; avoids heavy xorg-dev bundle
 
       - name: Setup Julia
         uses: julia-actions/setup-julia@v2
@@ -55,14 +56,19 @@ jobs:
       - name: Julia cache
         uses: julia-actions/cache@v2
 
-      # Build the docs site (no deployment)
-      - name: Build VitePress docs via DocumenterVitepress.jl
+      # Make the docs env aware of the package, then instantiate once
+      - name: Prepare docs environment
+        run: |
+          julia --project=docs -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate(); Pkg.precompile()'
+
+      # Build docs only. No doctest. No deployment.
+      # Xvfb keeps GLMakie happy without pulling full X stack.
+      - name: Build docs (no deploy)
         env:
           DISPLAY: :0
         run: |
-          xvfb-run -s "-screen 0 1024x768x24" julia --project=docs -e 'include("docs/make.jl")'
+          xvfb-run -s "-screen 0 1024x768x24" julia --project=docs docs/make.jl
 
-      # Node for the PDF exporter
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -70,18 +76,15 @@ jobs:
           cache: 'npm'
           cache-dependency-path: docs/package-lock.json
 
-      # Install exporter locally in docs/ (keeps repo clean)
       - name: Install PDF exporter
         run: |
           cd docs
           [ -f package.json ] || npm init -y
           npm i -D vitepress-export-pdf puppeteer
 
-      # Export a single PDF from all routes
       - name: Export PDF
         working-directory: docs
         run: |
-          # Optional config file improves ordering; see snippet below.
           npx press-export-pdf export . --out-file JutulDarcy-docs.pdf
 
       - name: Upload PDF artifact
