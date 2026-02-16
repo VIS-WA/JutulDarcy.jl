@@ -37,27 +37,42 @@ echo -e "${GREEN}Prerequisites check passed${NC}"
 TMP_DIR=$(mktemp -d)
 echo "Using temporary directory: $TMP_DIR"
 
-# Copy the PDF-friendly index
-if [ -f "src/index_pdf.md" ]; then
-    cp "src/index_pdf.md" "$TMP_DIR/00_index.md"
-else
-    echo -e "${YELLOW}Warning: src/index_pdf.md not found, using regular index${NC}"
-    # Remove Vitepress frontmatter from index.md
-    sed '/^````@raw html$/,/^````$/d' "src/index.md" > "$TMP_DIR/00_index.md"
-fi
-
-# Function to clean markdown files (remove Documenter-specific syntax)
+# Function to clean markdown files for Pandoc PDF generation
+# Converts Documenter.jl-specific syntax to standard Pandoc markdown:
+# - Display math: ```math ... ``` → $$ ... $$
+# - Inline math: ``...`` → $...$
+# - Removes @docs, @example, @raw, @bibliography, @autodocs blocks
+# - Cleans up @ref and @cite link syntax
 clean_markdown() {
     local input="$1"
     local output="$2"
-    
-    # Remove @ref, @docs, @example blocks and other Documenter-specific syntax
-    sed -e 's/@ref[[:space:]]*[^)]*//g' \
-        -e 's/@docs//g' \
+    local tmp1=$(mktemp)
+    local tmp2=$(mktemp)
+
+    # Pass 1: Remove 4-backtick Documenter.jl / Vitepress blocks
+    sed -e '/^````@example/,/^````$/d' \
+        -e '/^````@raw/,/^````$/d' \
+        "$input" > "$tmp1"
+
+    # Pass 2: Remove 3-backtick Documenter.jl blocks
+    sed -e '/^```@docs$/,/^```$/d' \
         -e '/^```@example/,/^```$/d' \
-        -e '/^```@raw html$/,/^```$/d' \
-        -e 's/@raw html//g' \
-        "$input" > "$output"
+        -e '/^```@raw/,/^```$/d' \
+        -e '/^```@bibliography/,/^```$/d' \
+        -e '/^```@autodocs/,/^```$/d' \
+        "$tmp1" > "$tmp2"
+
+    # Pass 3: Convert math syntax, clean references, remove Vitepress syntax
+    sed -e '/^```math$/,/^```$/{s/^```math$/\$\$/;s/^```$/\$\$/}' \
+        -e 's/\[`\([^`]*\)`\](@ref[^)]*)/\1/g' \
+        -e 's/\[\([^]]*\)\](@ref[^)]*)/\1/g' \
+        -e 's/\[\([^]]*\)\](@cite[^)]*)/\1/g' \
+        -e 's/``[[:space:]]*\([^`]*[^`[:space:]]\)[[:space:]]*``/$\1$/g' \
+        -e '/^::: details/d' \
+        -e '/^:::$/d' \
+        "$tmp2" > "$output"
+
+    rm -f "$tmp1" "$tmp2"
 }
 
 # Generate example overview first
@@ -72,11 +87,16 @@ julia generate_examples_for_pdf.jl
 echo "Collecting documentation pages..."
 COUNTER=1
 
-# 1. Introduction section (from index_pdf.md)
+# 1. Introduction section (from index_pdf.md, or fallback to index.md)
 if [ -f "src/index_pdf.md" ]; then
     printf -v padded "%02d" $COUNTER
     clean_markdown "src/index_pdf.md" "$TMP_DIR/${padded}_index.md"
     echo "  Added: Introduction"
+    COUNTER=$((COUNTER + 1))
+elif [ -f "src/index.md" ]; then
+    printf -v padded "%02d" $COUNTER
+    clean_markdown "src/index.md" "$TMP_DIR/${padded}_index.md"
+    echo "  Added: Introduction (from index.md)"
     COUNTER=$((COUNTER + 1))
 fi
 
@@ -228,9 +248,11 @@ OUTPUT_PDF="JutulDarcy_Documentation.pdf"
 echo -e "${GREEN}Building PDF with Pandoc...${NC}"
 echo "This may take a few minutes..."
 
+DOCS_DIR="$(cd "$(dirname "$0")" && pwd)"
 pandoc "$COMBINED_MD" \
     -o "$OUTPUT_PDF" \
     --pdf-engine=xelatex \
+    --resource-path="$DOCS_DIR:$DOCS_DIR/src:$DOCS_DIR/src/assets" \
     --toc \
     --toc-depth=3 \
     --number-sections \
