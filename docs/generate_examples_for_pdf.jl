@@ -54,15 +54,18 @@ function parse_tags(line)
     return nothing
 end
 
+"""
+    convert_jl_to_markdown(input_path, output_path, category, exname)
+
+Convert a .jl example file to markdown format for PDF.
+
+This is a simplified conversion that doesn't execute code but preserves structure.
+Follows Literate.jl conventions:
+- Lines starting with "# " are markdown content
+- Lines starting with "#" alone are paragraph breaks (become blank lines)
+- Other lines are Julia code
+"""
 function convert_jl_to_markdown(input_path, output_path, category, exname)
-    """
-    Convert a .jl example file to markdown format for PDF.
-    This is a simplified conversion that doesn't execute code but preserves structure.
-    Follows Literate.jl conventions:
-    - Lines starting with "# " are markdown content
-    - Lines starting with "#" alone are paragraph breaks (become blank lines)
-    - Other lines are Julia code
-    """
     lines = readlines(input_path)
     
     open(output_path, "w") do out
@@ -151,10 +154,17 @@ function category_title(cat)
     return titlecase(replace(cat, "_" => " "))
 end
 
+"""
+    generate_all_examples()
+
+Generate markdown files for all examples in all categories.
+
+Processes all .jl files in ../examples/ and creates simplified markdown versions
+in src/examples/ suitable for PDF documentation.
+
+Returns the total number of examples generated.
+"""
 function generate_all_examples()
-    """
-    Generate markdown files for all examples in all categories.
-    """
     println("Generating example markdown files for PDF documentation...")
     
     # Create output directory
@@ -194,7 +204,7 @@ function generate_all_examples()
     return total_examples
 end
 
-# Run the generation
-if abspath(PROGRAM_FILE) == @__FILE__
+# Run the generation when script is executed directly
+if abspath(@__FILE__) == abspath(PROGRAM_FILE)
     generate_all_examples()
 end
