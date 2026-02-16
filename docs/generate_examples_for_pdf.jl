@@ -205,6 +205,6 @@ function generate_all_examples()
 end
 
 # Run the generation when script is executed directly
-if abspath(@__FILE__) == abspath(PROGRAM_FILE)
+if abspath(PROGRAM_FILE) == abspath(@__FILE__)
     generate_all_examples()
 end
