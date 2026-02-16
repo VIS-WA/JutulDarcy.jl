@@ -1,8 +1,20 @@
 #!/usr/bin/env julia
 
 # Generate simplified example markdown files for PDF documentation
+# 
 # This script converts .jl example files to markdown format suitable for PDF
-# without requiring code execution (which would be needed for full Literate.jl processing)
+# without requiring code execution (which would be needed for full Literate.jl processing).
+#
+# The script processes all examples in the ../examples/ directory and generates
+# simplified markdown versions in src/examples/ that include:
+# - Code blocks with syntax
+# - Text explanations (from # comments in Literate.jl format)
+# - Equations in LaTeX format
+# - Structure and organization
+#
+# Output: 39+ markdown files in src/examples/category/*.md
+#
+# This script is automatically called by build_pdf_pandoc.sh during PDF generation.
 
 using Pkg
 # Only use base Julia functionality to avoid dependencies
