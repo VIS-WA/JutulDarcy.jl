@@ -16,10 +16,17 @@ The PDF documentation includes:
 - **Detailed API** - In-depth documentation (forces, wells, primary/secondary variables, parameters, plotting, utilities)
 - **Parallelism and Compilation** - MPI, GPU, and compiled execution
 - **References** - Package information, paper list, Jutul functions, and bibliography
-- **Examples** - Overview of all available examples organized by category
-- **Validation** - Information about validation cases
+- **Examples** - Complete code examples organized by category:
+  - **Introduction** - Basic examples illustrating fundamental features
+  - **Workflow** - Complete workflows and advanced use cases
+  - **Data Assimilation** - History matching, optimization, and sensitivity analysis
+  - **Geothermal** - Geothermal reservoir simulation
+  - **Compositional** - Compositional flow and multi-component systems
+  - **Discretization** - Different discretization schemes
+  - **Properties** - Fluid properties and relationships
+- **Validation** - Validation cases with comparisons to other simulators and benchmarks
 
-For the full interactive examples with code execution and plots, visit https://sintefmath.github.io/JutulDarcy.jl/
+For the full interactive examples with code execution, plots, and detailed output, visit https://sintefmath.github.io/JutulDarcy.jl/
 
 ## Building the PDF Documentation
 
