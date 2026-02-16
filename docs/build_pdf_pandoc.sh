@@ -253,6 +253,7 @@ pandoc "$COMBINED_MD" \
     -o "$OUTPUT_PDF" \
     --pdf-engine=xelatex \
     --resource-path="$DOCS_DIR:$DOCS_DIR/src:$DOCS_DIR/src/assets" \
+    --include-in-header="$DOCS_DIR/pdf_header.tex" \
     --toc \
     --toc-depth=3 \
     --number-sections \
