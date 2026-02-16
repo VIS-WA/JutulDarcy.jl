@@ -8,7 +8,10 @@ on:
       - 'docs/src/**'
       - 'docs/make_pdf.jl'
       - 'docs/build_pdf_pandoc.sh'
+      - 'docs/generate_examples_for_pdf.jl'
+      - 'docs/generate_example_overview.jl'
       - '.github/workflows/generate-pdf.yml'
+      - 'examples/**'
   workflow_dispatch:
 
 jobs:

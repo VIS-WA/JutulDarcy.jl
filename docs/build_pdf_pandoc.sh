@@ -64,6 +64,10 @@ clean_markdown() {
 echo "Generating example overview..."
 julia generate_example_overview.jl
 
+# Generate all example markdown files for PDF
+echo "Generating example markdown files..."
+julia generate_examples_for_pdf.jl
+
 # Collect pages in the correct order following make.jl structure
 echo "Collecting documentation pages..."
 COUNTER=1
@@ -172,6 +176,24 @@ if [ -f "src/examples/overview/example_overview.md" ]; then
     COUNTER=$((COUNTER + 1))
 fi
 
+# Add all example categories in order
+for category in introduction workflow data_assimilation geothermal compositional discretization properties; do
+    category_dir="src/examples/$category"
+    if [ -d "$category_dir" ]; then
+        echo "  Subsection: $category examples"
+        # Process all .md files in the category directory
+        for ex_file in "$category_dir"/*.md; do
+            if [ -f "$ex_file" ]; then
+                ex_name=$(basename "$ex_file")
+                printf -v padded "%02d" $COUNTER
+                clean_markdown "$ex_file" "$TMP_DIR/${padded}_ex_${category}_${ex_name}"
+                echo "    Added: examples/$category/$ex_name"
+                COUNTER=$((COUNTER + 1))
+            fi
+        done
+    fi
+done
+
 # 10. Validation section
 echo "  Section: Validation"
 if [ -f "src/man/validation.md" ]; then
@@ -179,6 +201,21 @@ if [ -f "src/man/validation.md" ]; then
     clean_markdown "src/man/validation.md" "$TMP_DIR/${padded}_validation.md"
     echo "    Added: man/validation.md"
     COUNTER=$((COUNTER + 1))
+fi
+
+# Add validation examples
+validation_dir="src/examples/validation"
+if [ -d "$validation_dir" ]; then
+    echo "  Subsection: Validation models"
+    for val_file in "$validation_dir"/*.md; do
+        if [ -f "$val_file" ]; then
+            val_name=$(basename "$val_file")
+            printf -v padded "%02d" $COUNTER
+            clean_markdown "$val_file" "$TMP_DIR/${padded}_val_${val_name}"
+            echo "    Added: validation/$val_name"
+            COUNTER=$((COUNTER + 1))
+        fi
+    done
 fi
 
 # Combine all markdown files
