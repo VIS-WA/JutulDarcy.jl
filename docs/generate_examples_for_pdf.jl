@@ -16,8 +16,7 @@
 #
 # This script is automatically called by build_pdf_pandoc.sh during PDF generation.
 
-using Pkg
-# Only use base Julia functionality to avoid dependencies
+# Note: Only uses base Julia functionality to avoid dependencies
 
 function get_example_categories()
     basepth = joinpath(@__DIR__, "..", "examples")
@@ -144,7 +143,7 @@ function convert_jl_to_markdown(input_path, output_path, category, exname)
         println(out, "")
         println(out, "*Note: This is a simplified version for the PDF documentation. ")
         println(out, "For the full interactive example with code execution, plots, and detailed output, ")
-        println(out, "please visit the [online documentation](https://sintefmath.github.io/JutulDarcy.jl/dev/examples/$category/$exname/).*")
+        println(out, "please visit the [online documentation](https://sintefmath.github.io/JutulDarcy.jl/stable/examples/$category/$exname/).*")
     end
     
     return true
