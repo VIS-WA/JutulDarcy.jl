@@ -1,5 +1,7 @@
 # JutulDarcy.jl
 
+![JutulDarcy Logo](logo.png){width=30%}
+
 Re-thinking reservoir simulation in Julia
 
 High-performance porous media and reservoir simulator based on automatic differentiation
