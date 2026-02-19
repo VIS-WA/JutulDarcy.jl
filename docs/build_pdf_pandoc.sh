@@ -41,7 +41,8 @@ echo "Using temporary directory: $TMP_DIR"
 # Converts Documenter.jl-specific syntax to standard Pandoc markdown:
 # - Display math: ```math ... ``` → $$ ... $$
 # - Inline math: ``...`` → $...$
-# - Removes @docs, @example, @raw, @bibliography, @autodocs blocks
+# - Removes any remaining @docs, @example, @raw, @bibliography, @autodocs blocks
+#   (note: @docs blocks should already be resolved by resolve_docs_blocks.jl)
 # - Cleans up @ref and @cite link syntax
 clean_markdown() {
     local input="$1"
@@ -54,7 +55,7 @@ clean_markdown() {
         -e '/^````@raw/,/^````$/d' \
         "$input" > "$tmp1"
 
-    # Pass 2: Remove 3-backtick Documenter.jl blocks
+    # Pass 2: Remove remaining Documenter.jl blocks that were not resolved
     sed -e '/^```@docs$/,/^```$/d' \
         -e '/^```@example/,/^```$/d' \
         -e '/^```@raw/,/^```$/d' \
@@ -83,43 +84,58 @@ julia generate_example_overview.jl
 echo "Generating example markdown files..."
 julia generate_examples_for_pdf.jl
 
+# Resolve @docs blocks: copy source tree and replace @docs with real docstrings
+echo "Preparing source files..."
+RESOLVED_SRC="$TMP_DIR/resolved_src"
+cp -r src "$RESOLVED_SRC"
+
+echo "Resolving @docs blocks (extracting docstrings)..."
+if julia --project=. resolve_docs_blocks.jl "$RESOLVED_SRC" 2>&1; then
+    echo -e "${GREEN}@docs blocks resolved successfully${NC}"
+else
+    echo -e "${YELLOW}Warning: Could not resolve @docs blocks. API documentation may be incomplete in the PDF.${NC}"
+fi
+
+# Use the resolved source tree for all subsequent file collection
+SRC_DIR="$RESOLVED_SRC"
+
 # Collect pages in the correct order following make.jl structure
 echo "Collecting documentation pages..."
 COUNTER=1
 
 # 1. Introduction section (from index_pdf.md, or fallback to index.md)
-if [ -f "src/index_pdf.md" ]; then
+if [ -f "$SRC_DIR/index_pdf.md" ]; then
     printf -v padded "%02d" $COUNTER
-    clean_markdown "src/index_pdf.md" "$TMP_DIR/${padded}_index.md"
+    clean_markdown "$SRC_DIR/index_pdf.md" "$TMP_DIR/${padded}_index.md"
     echo "  Added: Introduction"
     COUNTER=$((COUNTER + 1))
-elif [ -f "src/index.md" ]; then
+elif [ -f "$SRC_DIR/index.md" ]; then
     printf -v padded "%02d" $COUNTER
-    clean_markdown "src/index.md" "$TMP_DIR/${padded}_index.md"
+    clean_markdown "$SRC_DIR/index.md" "$TMP_DIR/${padded}_index.md"
     echo "  Added: Introduction (from index.md)"
     COUNTER=$((COUNTER + 1))
 fi
 
 # 2. Getting started
-if [ -f "src/man/intro.md" ]; then
+if [ -f "$SRC_DIR/man/intro.md" ]; then
     printf -v padded "%02d" $COUNTER
-    clean_markdown "src/man/intro.md" "$TMP_DIR/${padded}_intro.md"
+    clean_markdown "$SRC_DIR/man/intro.md" "$TMP_DIR/${padded}_intro.md"
     echo "  Added: Getting started"
     COUNTER=$((COUNTER + 1))
 fi
 
 # 3. First example
-if [ -f "src/man/first_ex.md" ]; then
+if [ -f "$SRC_DIR/man/first_ex.md" ]; then
     printf -v padded "%02d" $COUNTER
-    clean_markdown "src/man/first_ex.md" "$TMP_DIR/${padded}_first_ex.md"
+    clean_markdown "$SRC_DIR/man/first_ex.md" "$TMP_DIR/${padded}_first_ex.md"
     echo "  Added: Your first simulation"
     COUNTER=$((COUNTER + 1))
 fi
 
 # 4. FAQ
-if [ -f "src/extras/faq.md" ]; then
+if [ -f "$SRC_DIR/extras/faq.md" ]; then
     printf -v padded "%02d" $COUNTER
-    clean_markdown "src/extras/faq.md" "$TMP_DIR/${padded}_faq.md"
+    clean_markdown "$SRC_DIR/extras/faq.md" "$TMP_DIR/${padded}_faq.md"
     echo "  Added: FAQ"
     COUNTER=$((COUNTER + 1))
 fi
@@ -127,9 +143,9 @@ fi
 # 5. Fundamentals section
 echo "  Section: Fundamentals"
 for section in highlevel basics/input_files basics/systems basics/solution; do
-    if [ -f "src/man/$section.md" ]; then
+    if [ -f "$SRC_DIR/man/$section.md" ]; then
         printf -v padded "%02d" $COUNTER
-        clean_markdown "src/man/$section.md" "$TMP_DIR/${padded}_$(basename $section).md"
+        clean_markdown "$SRC_DIR/man/$section.md" "$TMP_DIR/${padded}_$(basename $section).md"
         echo "    Added: man/$section.md"
         COUNTER=$((COUNTER + 1))
     fi
@@ -138,9 +154,9 @@ done
 # 6. Detailed API section
 echo "  Section: Detailed API"
 for section in basics/forces basics/wells basics/primary basics/secondary basics/parameters basics/plotting basics/utilities; do
-    if [ -f "src/man/$section.md" ]; then
+    if [ -f "$SRC_DIR/man/$section.md" ]; then
         printf -v padded "%02d" $COUNTER
-        clean_markdown "src/man/$section.md" "$TMP_DIR/${padded}_$(basename $section).md"
+        clean_markdown "$SRC_DIR/man/$section.md" "$TMP_DIR/${padded}_$(basename $section).md"
         echo "    Added: man/$section.md"
         COUNTER=$((COUNTER + 1))
     fi
@@ -149,9 +165,9 @@ done
 # 7. Parallelism and compilation section
 echo "  Section: Parallelism and compilation"
 for section in advanced/mpi advanced/gpu advanced/compiled; do
-    if [ -f "src/man/$section.md" ]; then
+    if [ -f "$SRC_DIR/man/$section.md" ]; then
         printf -v padded "%02d" $COUNTER
-        clean_markdown "src/man/$section.md" "$TMP_DIR/${padded}_$(basename $section).md"
+        clean_markdown "$SRC_DIR/man/$section.md" "$TMP_DIR/${padded}_$(basename $section).md"
         echo "    Added: man/$section.md"
         COUNTER=$((COUNTER + 1))
     fi
@@ -159,46 +175,46 @@ done
 
 # 8. References section
 echo "  Section: References"
-if [ -f "src/man/basics/package.md" ]; then
+if [ -f "$SRC_DIR/man/basics/package.md" ]; then
     printf -v padded "%02d" $COUNTER
-    clean_markdown "src/man/basics/package.md" "$TMP_DIR/${padded}_package.md"
+    clean_markdown "$SRC_DIR/man/basics/package.md" "$TMP_DIR/${padded}_package.md"
     echo "    Added: man/basics/package.md"
     COUNTER=$((COUNTER + 1))
 fi
 
-if [ -f "src/extras/paper_list.md" ]; then
+if [ -f "$SRC_DIR/extras/paper_list.md" ]; then
     printf -v padded "%02d" $COUNTER
-    clean_markdown "src/extras/paper_list.md" "$TMP_DIR/${padded}_paper_list.md"
+    clean_markdown "$SRC_DIR/extras/paper_list.md" "$TMP_DIR/${padded}_paper_list.md"
     echo "    Added: extras/paper_list.md"
     COUNTER=$((COUNTER + 1))
 fi
 
-if [ -f "src/ref/jutul.md" ]; then
+if [ -f "$SRC_DIR/ref/jutul.md" ]; then
     printf -v padded "%02d" $COUNTER
-    clean_markdown "src/ref/jutul.md" "$TMP_DIR/${padded}_jutul_ref.md"
+    clean_markdown "$SRC_DIR/ref/jutul.md" "$TMP_DIR/${padded}_jutul_ref.md"
     echo "    Added: ref/jutul.md"
     COUNTER=$((COUNTER + 1))
 fi
 
-if [ -f "src/extras/refs.md" ]; then
+if [ -f "$SRC_DIR/extras/refs.md" ]; then
     printf -v padded "%02d" $COUNTER
-    clean_markdown "src/extras/refs.md" "$TMP_DIR/${padded}_refs.md"
+    clean_markdown "$SRC_DIR/extras/refs.md" "$TMP_DIR/${padded}_refs.md"
     echo "    Added: extras/refs.md"
     COUNTER=$((COUNTER + 1))
 fi
 
 # 9. Examples section
 echo "  Section: Examples"
-if [ -f "src/examples/overview/example_overview.md" ]; then
+if [ -f "$SRC_DIR/examples/overview/example_overview.md" ]; then
     printf -v padded "%02d" $COUNTER
-    clean_markdown "src/examples/overview/example_overview.md" "$TMP_DIR/${padded}_example_overview.md"
+    clean_markdown "$SRC_DIR/examples/overview/example_overview.md" "$TMP_DIR/${padded}_example_overview.md"
     echo "    Added: examples/overview/example_overview.md"
     COUNTER=$((COUNTER + 1))
 fi
 
 # Add all example categories in order
 for category in introduction workflow data_assimilation geothermal compositional discretization properties; do
-    category_dir="src/examples/$category"
+    category_dir="$SRC_DIR/examples/$category"
     if [ -d "$category_dir" ]; then
         echo "  Subsection: $category examples"
         # Process all .md files in the category directory
@@ -216,15 +232,15 @@ done
 
 # 10. Validation section
 echo "  Section: Validation"
-if [ -f "src/man/validation.md" ]; then
+if [ -f "$SRC_DIR/man/validation.md" ]; then
     printf -v padded "%02d" $COUNTER
-    clean_markdown "src/man/validation.md" "$TMP_DIR/${padded}_validation.md"
+    clean_markdown "$SRC_DIR/man/validation.md" "$TMP_DIR/${padded}_validation.md"
     echo "    Added: man/validation.md"
     COUNTER=$((COUNTER + 1))
 fi
 
 # Add validation examples
-validation_dir="src/examples/validation"
+validation_dir="$SRC_DIR/examples/validation"
 if [ -d "$validation_dir" ]; then
     echo "  Subsection: Validation models"
     for val_file in "$validation_dir"/*.md; do
