@@ -5,26 +5,42 @@
 
 function get_example_files()
     basepth = joinpath(@__DIR__, "..", "examples")
-    examples = Dict{String, Vector{String}}()
-    
-    categories = ["introduction", "workflow", "data_assimilation", "geothermal", 
+    examples = Dict{String, Vector{Tuple{String,String}}}()
+
+    categories = ["introduction", "workflow", "data_assimilation", "geothermal",
                   "compositional", "discretization", "properties", "validation"]
-    
+
     for category in categories
         catpath = joinpath(basepth, category)
         if isdir(catpath)
-            examples[category] = String[]
+            examples[category] = Tuple{String,String}[]
             for file in readdir(catpath)
                 if endswith(file, ".jl")
                     filename = first(splitext(file))
-                    push!(examples[category], filename)
+                    title = extract_title(joinpath(catpath, file), filename)
+                    push!(examples[category], (filename, title))
                 end
             end
-            sort!(examples[category])
+            sort!(examples[category], by = first)
         end
     end
-    
+
     return examples, categories
+end
+
+function extract_title(filepath, fallback)
+    # Read the first Literate.jl markdown heading (# # Title)
+    for line in eachline(filepath)
+        if startswith(line, "# #")
+            # Strip leading "# " (Literate comment) and "#" (markdown heading)
+            title = strip(replace(line, r"^#\s*#+" => ""))
+            if !isempty(title)
+                return title
+            end
+        end
+    end
+    # Fallback: convert filename to a readable title
+    return titlecase(replace(fallback, "_" => " "))
 end
 
 function category_title(cat)
@@ -33,20 +49,20 @@ end
 
 function write_example_overview()
     examples, categories = get_example_files()
-    
+
     outdir = joinpath(@__DIR__, "src", "examples", "overview")
     mkpath(outdir)
     outpath = joinpath(outdir, "example_overview.md")
-    
+
     open(outpath, "w") do io
         println(io, "# Example Overview\n")
         println(io, "JutulDarcy.jl comes with a number of examples that illustrate different features of the simulator.\n")
-        println(io, "The examples are organized by category. For the full interactive examples with code and outputs, please visit the online documentation at https://sintefmath.github.io/JutulDarcy.jl/\n")
-        
+        println(io, "The examples are organized by category. Each example listed below has its own section with source code and explanations later in this document. For the full interactive examples with plots and outputs, please visit the online documentation at https://sintefmath.github.io/JutulDarcy.jl/\n")
+
         for category in categories
             if haskey(examples, category) && !isempty(examples[category])
                 println(io, "## $(category_title(category))\n")
-                
+
                 # Add category descriptions
                 if category == "introduction"
                     println(io, "Basic examples that illustrate fundamental features of JutulDarcy.jl.\n")
@@ -65,21 +81,15 @@ function write_example_overview()
                 elseif category == "validation"
                     println(io, "Validation cases comparing with other simulators and benchmarks.\n")
                 end
-                
-                for ex in examples[category]
-                    # Convert underscores to readable format
-                    title = titlecase(replace(ex, "_" => " "))
-                    println(io, "- **$title** (`$ex.jl`)")
+
+                for (filename, title) in examples[category]
+                    println(io, "- **$title**")
                 end
                 println(io, "")
             end
         end
-        
-        println(io, "\n---\n")
-        println(io, "*Note: The full examples with code, plots, and detailed explanations are available in the [online documentation](https://sintefmath.github.io/JutulDarcy.jl/dev/). ")
-        println(io, "You can also find the example scripts in the `examples/` directory of the repository.*")
     end
-    
+
     println("Generated example overview at: $outpath")
 end
 
